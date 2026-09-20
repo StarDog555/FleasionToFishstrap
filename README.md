@@ -1,100 +1,141 @@
-# FleasionToFishstrap
+# FleasionToFishstrap V3
 
-Converts a Fleasion-style `replacement_rules` JSON file into a Fishstrap-style local mod folder layout.
+A small Windows C++ converter for Fleasion `replacement_rules` configs.
 
-## Important
+V3 is intentionally **local-only** for `mode: "id"`: it does not ask for a Roblox login, cookie, or Asset Delivery authentication. Instead, it expects you to place the downloaded replacement assets in an `assets` folder beside the JSON file.
 
-This converter only converts replacement information that can be represented as local client files.
+## What it does
 
-A Fleasion rule using:
+For RIVALS skybox rules such as:
 
 ```json
-"mode": "id",
-"with_id": 123456789
+{
+  "name": "Skybox BK",
+  "replace_ids": [14147881792],
+  "mode": "id",
+  "enabled": true,
+  "with_id": 93590148140827
+}
 ```
 
-is an **asset ID → asset ID redirect**. Fishstrap's local file mod system does not directly use that format.
+V3 looks for an asset named:
 
-The converter can create the expected client path layout, but it **cannot download a Roblox asset ID and turn it into the required client texture/file**. You still need the actual replacement file for a working Fishstrap mod.
-
-## Usage
-
-Run the converter with the JSON file as the first argument:
-
-```bat
-FleasionToFishstrap.exe "C:\Path\To\config.json"
+```text
+93590148140827
 ```
 
-The output folder is created in the **same directory as the input JSON**.
+or:
+
+```text
+93590148140827.png
+93590148140827.dds
+```
+
+inside:
+
+```text
+assets\
+```
+
+The file can have **no extension**. V3 detects PNG/DDS from the file bytes.
+
+For PNG sky faces, V3 converts the image to BC1/DXT1 DDS data and writes it with the Roblox sky filename:
+
+```text
+PlatformContent\pc\textures\sky\sky512_bk.tex
+PlatformContent\pc\textures\sky\sky512_dn.tex
+PlatformContent\pc\textures\sky\sky512_ft.tex
+PlatformContent\pc\textures\sky\sky512_lf.tex
+PlatformContent\pc\textures\sky\sky512_rt.tex
+PlatformContent\pc\textures\sky\sky512_up.tex
+```
+
+Fishstrap's own logs show these `sky512_*.tex` files being handled by its file-modification system. 
+
+## Downloading the replacement images
+
+The `with_id` values in a Fleasion config are Roblox asset IDs. For the sky used while developing this tool, the replacement images were downloaded manually with the older Asset Delivery URL:
+
+```text
+https://assetdelivery.roblox.com/v1/asset?id=ASSET_ID
+```
 
 For example:
 
 ```text
-C:\MyMods\sky.json
+https://assetdelivery.roblox.com/v1/asset?id=93590148140827
 ```
 
-becomes:
+This endpoint worked for the sky assets used during testing. It is an older endpoint, so it may return `401 Unauthorized` for some assets or in some situations. V3 itself does **not** authenticate to Roblox or download assets automatically.
+
+After downloading an image, place it in the `assets` folder using its `with_id` as the filename. `.png` is fine, and the extension can also be omitted:
 
 ```text
-C:\MyMods\sky_FishstrapMod\
+93590148140827.png
+102453743082771.png
+118903490011578.png
+126562643473125.png
+77446329776959.png
+120495452755285.png
 ```
 
-## Example output
-
-For a six-face skybox, the generated structure is:
+## Folder layout
 
 ```text
-sky_FishstrapMod\
-└── PlatformContent\
-    └── pc\
-        └── textures\
-            └── sky\
-                ├── sky512_bk.tex
-                ├── sky512_dn.tex
-                ├── sky512_ft.tex
-                ├── sky512_lf.tex
-                ├── sky512_rt.tex
-                └── sky512_up.tex
+MySky.json
+assets\
+    93590148140827.png
+    102453743082771.png
+    118903490011578.png
+    126562643473125.png
+    77446329776959.png
+    120495452755285.png
 ```
 
-## Build on Windows
+V3 also accepts the six files without extensions. It detects PNG/DDS from the file bytes rather than the filename.
 
-### Visual Studio Developer Command Prompt
+## Run
 
 ```bat
-cl /O2 /std:c++17 FleasionToFishstrap.cpp /Fe:FleasionToFishstrap.exe
+FleasionToFishstrapV3.exe "C:\MyMods\MySky.json"
 ```
 
-### MinGW-w64
+The output is created beside the JSON:
+
+```text
+MySky_FishstrapModV3\
+```
+
+with a conversion report and `_sources` folder.
+
+## Install the generated mod
+
+Copy the **contents** of the generated `MySky_FishstrapModV3` folder into:
+
+```text
+%LocalAppData%\Fishstrap\Modifications\
+```
+
+Then launch Roblox through Fishstrap.
+
+## Build with MinGW
 
 ```bat
-g++ -O2 -std=c++17 FleasionToFishstrap.cpp -o FleasionToFishstrap.exe
+g++ -O2 -std=c++17 FleasionToFishstrapV3.cpp -o FleasionToFishstrapV3.exe -lole32 -luuid -lwindowscodecs
 ```
 
-## Input format
+## Build with MSVC
 
-The input JSON must contain a top-level `replacement_rules` array.
-
-Example:
-
-```json
-{
-  "replacement_rules": [
-    {
-      "name": "Skybox BK",
-      "replace_ids": [14147881792],
-      "mode": "id",
-      "enabled": true,
-      "with_id": 93590148140827
-    }
-  ]
-}
+```bat
+cl /O2 /std:c++17 FleasionToFishstrapV3.cpp /Fe:FleasionToFishstrapV3.exe
 ```
 
 ## Notes
 
-- The program does **not** install certificates.
-- The program does **not** intercept HTTPS traffic.
-- The program does **not** modify Roblox network traffic.
-- The converter is intended to generate a local Fishstrap mod layout.
-- Roblox updates can change client files and paths, so generated mods may need to be updated.
+`mode: "id"` requires `with_id` and a local replacement asset named with that ID.
+
+`mode: "local"` is supported when `local_path` points to a file.
+
+`mode: "cdn"` is intentionally not fetched by V3. Download the file yourself into `assets` first.
+
+Non-sky rules are skipped unless a future version has a known Fishstrap client path for them. V3 focuses on the six `Skybox BK/DN/FT/LF/RT/UP` files so it does not guess incorrect paths.
